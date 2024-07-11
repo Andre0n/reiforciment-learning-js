@@ -19,8 +19,8 @@ const goal = DEFAULT_GOAL_POS;
 
 const qLearning = new QLearning(0.5, 0.9, 0.1, robot, goal, obstacle);
 
-let isTraining = false;
-
+let chart: Chart<"line", number[], number> | null = null;
+let modelReady = false;
 let stepsPerEpisode: number[] = [];
 
 function visualizeTrain() {
@@ -29,6 +29,7 @@ function visualizeTrain() {
   const maxEpisode = 1000;
   const run = () => {
     if (episode >= maxEpisode) {
+      modelReady = true;
       return;
     }
     if (qLearning.endState()) {
@@ -40,7 +41,7 @@ function visualizeTrain() {
     drawBoard(
       qLearning.robotPosition,
       qLearning.goalPosition,
-      qLearning.obstaclePosition,
+      qLearning.obstaclePosition
     );
     window.requestAnimationFrame(run);
   };
@@ -49,7 +50,7 @@ function visualizeTrain() {
 
 function train() {
   let episode = 0;
-  const maxEpisode = 10000;
+  const maxEpisode = 100_000;
   while (episode < maxEpisode) {
     if (qLearning.endState()) {
       episode++;
@@ -59,10 +60,12 @@ function train() {
     qLearning.trainOneEpisode();
   }
   drawChart();
+  modelReady = true;
 }
 
 function drawChart() {
-  new Chart(ctx, {
+  if (chart) chart.destroy();
+  chart = new Chart(ctx, {
     type: "line",
     data: {
       labels: stepsPerEpisode.map((_, i) => i),
@@ -78,12 +81,45 @@ function drawChart() {
   });
 }
 
+function visulaizeTest() {
+  if (!modelReady) {
+    alert("Model is not ready! Click at train button.");
+    return;
+  }
+  qLearning.reset();
+  drawBoard(robot, goal, obstacle);
+  let episode = 0;
+  const maxEpisode = 50;
+  const run = () => {
+    if (episode >= maxEpisode) {
+      return;
+    }
+    if (qLearning.endState()) {
+      episode++;
+      if (qLearning.success) stepsPerEpisode.push(qLearning.steps);
+      qLearning.reset();
+    }
+    qLearning.testOneEpisode();
+    drawBoard(
+      qLearning.robotPosition,
+      qLearning.goalPosition,
+      qLearning.obstaclePosition
+    );
+    window.requestAnimationFrame(run);
+  };
+  window.requestAnimationFrame(run);
+
+  drawChart();
+}
+
 document.getElementById("train")?.addEventListener("click", () => {
-  isTraining = true;
   train();
 });
 
 document.getElementById("visualize-train")?.addEventListener("click", () => {
-  isTraining = true;
   visualizeTrain();
+});
+
+document.getElementById("test")?.addEventListener("click", () => {
+  visulaizeTest();
 });

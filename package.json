@@ -3,15 +3,16 @@
   "version": "1.0.0",
   "description": "",
   "scripts": {
-    "build": "esbuild src/index.ts --bundle --minify --sourcemap --outfile=dist/index.js",
+    "build": "esbuild src/index.ts --bundle --minify --outfile=dist/index.js",
     "start": "esbuild src/index.ts --bundle --minify --sourcemap --outfile=dist/index.js --watch",
-    "dev": "python -m http.server 8080 --directory dist -C -1"
+    "dev": "live-server dist/ --port 8080"
   },
   "keywords": [],
   "author": "André Gabriel",
   "license": "MIT",
   "devDependencies": {
     "esbuild": "^0.23.0",
+    "live-server": "^1.2.2",
     "typescript": "^5.5.3"
   },
   "dependencies": {

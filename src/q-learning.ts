@@ -7,9 +7,10 @@ import {
 } from "./constants";
 import { State, Action, Reward } from "./types";
 import Vec2 from "./vec2";
+import MMap from "./MMap";
 
 class QLearning {
-  private QTable: Map<State, Map<Action, number>>;
+  public QTable: MMap<State, number[]>;
   private alpha: number;
   private gamma: number;
   private epsilon: number;
@@ -27,9 +28,9 @@ class QLearning {
     epsilon: number,
     robot: Vec2,
     goal: Vec2,
-    obstacle: Vec2,
+    obstacle: Vec2
   ) {
-    this.QTable = new Map();
+    this.QTable = new MMap();
     this.alpha = alpha;
     this.gamma = gamma;
     this.epsilon = epsilon;
@@ -44,18 +45,26 @@ class QLearning {
     const actions = this.QTable.get(state);
 
     if (!actions || randomValue < this.epsilon) {
-      return Object.values(Action)[Math.floor(Math.random() * 9)];
+      return Math.floor(Math.random() * 9);
     }
 
-    let bestAction = Action.UP;
-    let bestValue = actions.get(bestAction) as number;
-    actions.forEach((value, action) => {
-      if (value > bestValue) {
-        bestAction = action;
-        bestValue = value;
-      }
-    });
+    let bestAction = actions.reduce(
+      (iMax, x, i, arr) => (x > arr[iMax] ? i : iMax),
+      0
+    );
     return bestAction;
+  }
+
+  private selectBestAction(state: State): Action {
+    const actions = this.QTable.get(state);
+    if (actions) {
+      let bestAction = actions.reduce(
+        (iMax, x, i, arr) => (x > arr[iMax] ? i : iMax),
+        0
+      );
+      return bestAction;
+    }
+    return Action.RIGHT;
   }
 
   private performAction(state: State, action: Action): State {
@@ -91,15 +100,19 @@ class QLearning {
         ry += 1;
         break;
     }
-    const newPos = this.obstaclePosition.add(new Vec2(rx, ry));
     if (
-      newPos.x < 0 ||
-      newPos.x >= GRID_SIZE.x ||
-      newPos.y < 0 ||
-      newPos.y >= GRID_SIZE.y
+      this.obstaclePosition.x + rx < 0 ||
+      this.obstaclePosition.x + rx >= GRID_SIZE.x
     ) {
-      return state;
+      rx = state.x;
     }
+    if (
+      this.obstaclePosition.y + ry < 0 ||
+      this.obstaclePosition.y + ry >= GRID_SIZE.y
+    ) {
+      ry = state.y;
+    }
+
     return { x: rx, y: ry };
   }
 
@@ -107,7 +120,7 @@ class QLearning {
     state: State,
     action: Action,
     reward: Reward,
-    nextState: State,
+    nextState: State
   ): void {
     const qValue = this.getQValue(state, action);
     const nextAction = this.selectAction(nextState);
@@ -118,26 +131,12 @@ class QLearning {
 
     const actions = this.QTable.get(state);
     if (actions) {
-      actions.set(action, newQValue);
+      actions[action] = newQValue;
     }
   }
 
-  private getReward(state: State, action: Action): Reward {
-    const rewarad = this.robotPosition.distanceTo(this.goalPosition);
-
+  private getReward(state: State): Reward {
     if (this.robotPosition.equals(this.goalPosition)) {
-
-      if (this.steps < 10) {
-        return Reward.GOAL * 5;
-      }
-        
-      if (this.steps < 20) {
-        return Reward.GOAL * 3;
-      }
-
-      if (this.steps < 50) {
-        return Reward.GOAL * 2;
-      }
       return Reward.GOAL;
     }
 
@@ -148,35 +147,29 @@ class QLearning {
     if (state.x > 0) {
       return Reward.RIGHT_SIDE;
     }
-
-    return Reward.NOTHING - rewarad;
+    return Reward.NOTHING;
   }
 
   private getQValue(state: State, action: Action): number {
     const actions = this.QTable.get(state);
 
     if (!actions) {
-      this.QTable.set(state, new Map<Action, number>([[action, 0]]));
+      this.QTable.set(state, Array(9).fill(0));
       return 0;
     }
 
-    if (!actions.has(action)) {
-      actions.set(action, 0);
-      return 0;
-    }
-
-    return actions.get(action) as number;
+    return actions[action];
   }
 
   private updateRobotPosition(state: State): void {
-    this.robotPosition = this.obstaclePosition.add(new Vec2(state.x, state.y));
+    this.robotPosition = this.obstaclePosition.add(state as Vec2);
   }
 
   private updateObstaclePosition(): void {
     const speed = OBSTACLE_SPEEDS[Math.floor(Math.random() * 3)];
     this.obstaclePosition = new Vec2(
       this.obstaclePosition.x,
-      (this.obstaclePosition.y + speed) % GRID_SIZE.y,
+      (this.obstaclePosition.y + speed) % GRID_SIZE.y
     );
   }
 
@@ -193,7 +186,7 @@ class QLearning {
       this.robotPosition.equals(this.goalPosition) ||
       this.robotPosition.equals(this.obstaclePosition)
     ) {
-      if  (this.robotPosition.equals(this.goalPosition)) {
+      if (this.robotPosition.equals(this.goalPosition)) {
         this.success = true;
       }
       return true;
@@ -206,8 +199,18 @@ class QLearning {
     let state = { ...relativePos };
     const action = this.selectAction(state);
     const nextState = this.performAction(state, action);
-    const reward = this.getReward(state, action);
+    const reward = this.getReward(state);
     this.updateQValue(state, action, reward, nextState);
+    this.updateRobotPosition(nextState);
+    this.updateObstaclePosition();
+    this.steps += 1;
+  }
+
+  testOneEpisode(): void {
+    let relativePos = this.robotPosition.sub(this.obstaclePosition);
+    let state = { ...relativePos };
+    const action = this.selectBestAction(state);
+    const nextState = this.performAction(state, action);
     this.updateRobotPosition(nextState);
     this.updateObstaclePosition();
     this.steps += 1;
